@@ -177,7 +177,7 @@ func ComponentToStream(writer io.Writer, componenter Componenter) (totalBytesWri
 		totalBytesWritten, err = fmt.Fprintf(writer, "$%d%s%s%s", len(s), RecordSeparator, s, RecordSeparator)
 	case *SimpleString:
 		s := componentType.String()
-		totalBytesWritten, err = fmt.Fprintf(writer, "$%d%s%s%s", len(s), RecordSeparator, s, RecordSeparator)
+		totalBytesWritten, err = fmt.Fprintf(writer, "+%s%s", s, RecordSeparator)
 	case *Null:
 		totalBytesWritten, err = fmt.Fprintf(writer, "*-1%s", RecordSeparator)
 	case *NullString:
