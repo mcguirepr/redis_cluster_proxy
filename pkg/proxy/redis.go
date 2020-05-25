@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -56,6 +57,7 @@ var MaxConnectRetries = retry.MaxAttempts{
 
 const ClusterSlotsDiscoverStatement = "*2\r\n$7\r\nCLUSTER\r\n$5\r\nslots\r\n"
 const ClusterNodeDiscoverStatement = "*2\r\n$7\r\nCLUSTER\r\n$5\r\nNODES\r\n"
+const DELIMITER byte = '\n'
 
 // DiscoverAndListen contacts the cluster and gets the list of nodes, then establishes proxies for each node
 // When contacting redis, we get back a list of server addresses WITHIN the cluster These are private addresses)
@@ -85,8 +87,12 @@ func (r *Redis) DiscoverAndListen() (err error) {
 		if len(r.clusterPassword) > 0 {
 			ClusterAuthStatement := fmt.Sprintf("*2\r\n$4\r\nAUTH\r\n$%d\r\n%s\r\n", len(r.clusterPassword), r.clusterPassword)
 			_, err = cluster.Write([]byte(ClusterAuthStatement))
+			content, readErr := Read(cluster, DELIMITER)
+			log.Println("Auth Response | " + content + " | Read Error | " + readErr.Error())
 		}
+
 		_, err = cluster.Write([]byte(ClusterSlotsDiscoverStatement))
+
 		if err != nil && io.EOF != err {
 			log.Println("io error while writing to cluster socket: " + err.Error())
 			return err
@@ -114,6 +120,8 @@ func (r *Redis) DiscoverAndListen() (err error) {
 		if len(r.clusterPassword) > 0 {
 			ClusterAuthStatement := fmt.Sprintf("*2\r\n$4\r\nAUTH\r\n$%d\r\n%s\r\n", len(r.clusterPassword), r.clusterPassword)
 			_, err = cluster.Write([]byte(ClusterAuthStatement))
+			content, readErr := Read(cluster, DELIMITER)
+			log.Println("Auth Response | " + content + " | Read Error | " + readErr.Error())
 		}
 		_, err = cluster.Write([]byte(ClusterNodeDiscoverStatement))
 		if err != nil && io.EOF != err {
@@ -448,4 +456,23 @@ func isMoved(componenter redisPkg.Componenter) (parts []string, moved bool) {
 		}
 	}
 	return []string{}, false
+}
+
+func Read(conn net.Conn, delim byte) (string, error) {
+	reader := bufio.NewReader(conn)
+	var buffer bytes.Buffer
+	for {
+		ba, isPrefix, err := reader.ReadLine()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return "", err
+		}
+		buffer.Write(ba)
+		if !isPrefix {
+			break
+		}
+	}
+	return buffer.String(), nil
 }
