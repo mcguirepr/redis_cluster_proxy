@@ -111,6 +111,10 @@ func (r *Redis) DiscoverAndListen() (err error) {
 	}
 
 	{
+		if len(r.clusterPassword) > 0 {
+			ClusterAuthStatement := fmt.Sprintf("*2\r\n$4\r\nAUTH\r\n$%d\r\n%s\r\n", len(r.clusterPassword), r.clusterPassword)
+			_, err = cluster.Write([]byte(ClusterAuthStatement))
+		}
 		_, err = cluster.Write([]byte(ClusterNodeDiscoverStatement))
 		if err != nil && io.EOF != err {
 			log.Println("io error while writing to cluster socket: " + err.Error())
