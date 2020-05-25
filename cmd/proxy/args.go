@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/urfave/cli"
 	"log"
 	"os"
 	"os/signal"
@@ -9,12 +8,15 @@ import (
 	"redis_cluster_proxy/pkg/port_pool"
 	"redis_cluster_proxy/pkg/proxy"
 	"syscall"
+
+	"github.com/urfave/cli"
 )
 
 const (
 	ListenAddrFlagName               = "listenAddr"
 	ClusterAddrFlagName              = "clusterAddr"
 	PublicHostFlagName               = "publicHost"
+	ClusterPasswordFlagName          = "clusterPass"
 	NumberOfBuffersFlagName          = "numberOfBuffers"
 	MaxConcurrentConnectionsFlagName = "maxConcurrentConnections"
 	ReadBufferByteSizeFlagName       = "readBufferByteSize"
@@ -27,7 +29,7 @@ func buildArguments() *cli.App {
 		{
 			Name:        "server",
 			Usage:       "proxy local redis cluster requests to a private cluster",
-			UsageText:   "server -listenAddr LOCAL_ADDR:LOCAL_PORT -clusterAddr CLUSTER_ADDR:CLUSTER_PORT",
+			UsageText:   "server -listenAddr LOCAL_ADDR:LOCAL_PORT -clusterAddr CLUSTER_ADDR:CLUSTER_PORT -clusterPass CLUSTER_PASSWORD ",
 			Description: "launches a proxy server that translates local ip addresses to the cluster-private IP addresses for a redis cluster",
 			Flags: []cli.Flag{
 				cli.StringFlag{
@@ -41,6 +43,12 @@ func buildArguments() *cli.App {
 					EnvVar:   "CLUSTER_ADDR",
 					Required: true,
 					Usage:    "HOST_OR_IP:PORT this is how the proxy knows how to contact the cluster. This should be the address of any node in the cluster, the other nodes will be discovered by the proxy",
+				},
+				cli.StringFlag{
+					Name:     ClusterPasswordFlagName,
+					EnvVar:   "CLUSTER_PASSWORD",
+					Required: false,
+					Usage:    "The password for the cluster",
 				},
 				cli.StringFlag{
 					Name:     PublicHostFlagName,
@@ -81,6 +89,7 @@ func buildArguments() *cli.App {
 				redisProxy, err = newProxy(
 					c.String(ListenAddrFlagName),
 					c.String(ClusterAddrFlagName),
+					c.String(ClusterPasswordFlagName),
 					c.String(PublicHostFlagName),
 					c.Int(NumberOfBuffersFlagName),
 					c.Int(MaxConcurrentConnectionsFlagName),
@@ -119,7 +128,7 @@ func buildArguments() *cli.App {
 	return app
 }
 
-func newProxy(listenAddr, clusterAddr, publicHostname string, numberOfBuffers int, maxConcurrentConnections int, readBufferByteSize int) (redisProxy *proxy.Redis, err error) {
+func newProxy(listenAddr, clusterAddr, clusterPassword, publicHostname string, numberOfBuffers int, maxConcurrentConnections int, readBufferByteSize int) (redisProxy *proxy.Redis, err error) {
 
 	listenHostWithPort, err := ip_map.NewHostWithPortFromString(listenAddr)
 	if err != nil {
@@ -132,5 +141,5 @@ func newProxy(listenAddr, clusterAddr, publicHostname string, numberOfBuffers in
 
 	portKeeper := port_pool.NewCounter(listenHostWithPort.Port)
 
-	return proxy.NewRedis(listenHostWithPort, clusterHostWithPort, publicHostname, portKeeper, numberOfBuffers, maxConcurrentConnections, readBufferByteSize), nil
+	return proxy.NewRedis(listenHostWithPort, clusterHostWithPort, clusterPassword, publicHostname, portKeeper, numberOfBuffers, maxConcurrentConnections, readBufferByteSize), nil
 }

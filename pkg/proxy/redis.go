@@ -3,7 +3,6 @@ package proxy
 import (
 	"bytes"
 	"fmt"
-	"github.com/wojnosystems/retry"
 	"io"
 	"log"
 	"net"
@@ -13,11 +12,14 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/wojnosystems/retry"
 )
 
 type Redis struct {
 	listenAddr             ip_map.HostWithPort
 	clusterAddr            ip_map.HostWithPort
+	clusterPassword        string
 	publicHostname         string
 	ipMap                  *ip_map.Concurrent
 	portCounter            port_pool.Counter
@@ -31,10 +33,11 @@ type Redis struct {
 	debugOutputEnabled     bool
 }
 
-func NewRedis(listenAddr, clusterAddr ip_map.HostWithPort, publicHostname string, portKeeper port_pool.Counter, numberOfBuffers int, maxConcurrentConnections int, readBufferByteSize int) (redis *Redis) {
+func NewRedis(listenAddr, clusterAddr ip_map.HostWithPort, clusterPassword string, publicHostname string, portKeeper port_pool.Counter, numberOfBuffers int, maxConcurrentConnections int, readBufferByteSize int) (redis *Redis) {
 	ret := &Redis{
 		listenAddr:         listenAddr,
 		clusterAddr:        clusterAddr,
+		clusterPassword:    clusterPassword,
 		publicHostname:     publicHostname,
 		ipMap:              ip_map.NewConcurrent(),
 		portCounter:        portKeeper,
@@ -78,8 +81,11 @@ func (r *Redis) DiscoverAndListen() (err error) {
 
 	// close the connection to Redis
 	defer func() { _ = cluster.Close() }()
-
 	{
+		if len(r.clusterPassword) > 0 {
+			ClusterAuthStatement := fmt.Sprintf("*2\r\n$4\r\nAUTH\r\n$%d\r\n%s\r\n", len(r.clusterPassword), r.clusterPassword)
+			_, err = cluster.Write([]byte(ClusterAuthStatement))
+		}
 		_, err = cluster.Write([]byte(ClusterSlotsDiscoverStatement))
 		if err != nil && io.EOF != err {
 			log.Println("io error while writing to cluster socket: " + err.Error())
